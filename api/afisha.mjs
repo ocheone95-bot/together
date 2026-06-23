@@ -19,10 +19,22 @@ const appCat = (cats) => { for (const c of cats || []) if (CAT_MAP[c]) return CA
 
 function normalize(e) {
   const now = Math.floor(Date.now() / 1000);
-  const starts = (e.dates || []).map((x) => x.start).filter((s) => s > 0).sort((a, b) => a - b);
-  const next = starts.find((s) => s >= now) ?? starts[0];
-  let event_date = '', event_time = '';
-  if (next) { const d = new Date((next + MSK_OFFSET) * 1000); event_date = d.toISOString().slice(0, 10); event_time = d.toISOString().slice(11, 16); }
+  const dates = (e.dates || []).filter((d) => d && (d.start > 0 || d.end > 0));
+  // Relevant occurrence: upcoming, or currently ongoing (end still in the future). Long-running
+  // exhibitions carry stale past starts — keying on end avoids showing a 2017 date.
+  const occ = dates.filter((d) => (d.end || d.start) >= now).sort((a, b) => (a.start || 0) - (b.start || 0))[0];
+  let event_date = '', event_time = '', ongoing = false;
+  if (occ) {
+    if (occ.start >= now) {
+      const d = new Date((occ.start + MSK_OFFSET) * 1000);
+      event_date = d.toISOString().slice(0, 10);
+      const hm = d.toISOString().slice(11, 16);
+      event_time = hm === '00:00' ? '' : hm;
+    } else if (occ.end > 0) {
+      ongoing = true; // happening now; show "до <end>"
+      event_date = new Date((occ.end + MSK_OFFSET) * 1000).toISOString().slice(0, 10);
+    }
+  }
   const title = e.title ? e.title.charAt(0).toUpperCase() + e.title.slice(1) : '';
   const place = e.place ? [e.place.title, e.place.address].filter(Boolean).join(', ') : '';
   return {
@@ -34,7 +46,7 @@ function normalize(e) {
     location: place,
     lat: e.place && e.place.coords ? e.place.coords.lat : null,
     lon: e.place && e.place.coords ? e.place.coords.lon : null,
-    event_date, event_time,
+    event_date, event_time, ongoing,
     price: e.price || '',
     cats: e.categories || [],
   };
