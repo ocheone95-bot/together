@@ -245,6 +245,11 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
 .cd-details-toggle{display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 14px;margin:2px 0 8px;border-radius:var(--r-field);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:var(--text-secondary);font-size:13px;font-weight:500;font-family:inherit}
 .cd-details-toggle .chev{width:16px;height:16px;transition:transform .2s}
 .cd-details-toggle.open .chev{transform:rotate(180deg)}
+.afcard{margin-bottom:14px}
+.af-like{position:absolute;top:10px;right:10px;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;z-index:3;border:1px solid rgba(255,255,255,.18)}
+.af-like .ic{width:19px;height:19px}
+.af-like:active{transform:scale(.92)}
+.af-like.on{color:var(--accent-ember)}
 .field{width:100%;padding:14px;border-radius:var(--r-field);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text-primary);font-size:15px;font-family:inherit;margin-bottom:12px}
 .field::placeholder{color:var(--text-tertiary)}
 .label{font-size:13px;color:var(--text-secondary);margin:8px 2px 9px;font-weight:600}
@@ -380,13 +385,12 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
 
   <!-- ПОИСК -->
   <section class="screen" id="s-search">
-    <div class="statusbar glass"><span class="sb-l">поиск</span><span class="sb-r"></span></div>
-    <h1 class="display">Найти идею</h1>
-    <div class="searchfield glass"><svg class="ic"><use href="#i-search"/></svg><span class="grow">Куда сходим?</span><svg class="ic"><use href="#i-sliders"/></svg></div>
-    <div class="section-h">Категории</div>
-    <div class="catgrid" id="cat-grid"></div>
-    <div class="section-h">Популярное сейчас</div>
-    <div id="search-body" class="stagger"></div>
+    <div class="statusbar glass"><span class="sb-l">афиша</span><span class="sb-r" id="afisha-city">Москва</span></div>
+    <h1 class="display">Куда сходить</h1>
+    <div class="seg glass" id="af-seg" style="margin:6px 0 16px">
+      <button class="on" data-af="feed">Афиша</button><button data-af="liked">Понравившееся</button><button data-af="been">Где были</button>
+    </div>
+    <div id="afisha-body" class="stagger"></div>
   </section>
 
   <!-- БЫЛО -->
@@ -557,7 +561,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
   <!-- TAB BAR -->
   <nav class="tabbar">
     <button class="tab on" data-tab="home"><svg class="ic"><use href="#i-home"/></svg><span class="tl">Сегодня</span></button>
-    <button class="tab" data-tab="search"><svg class="ic"><use href="#i-search"/></svg><span class="tl">Поиск</span></button>
+    <button class="tab" data-tab="search"><svg class="ic"><use href="#i-stack"/></svg><span class="tl">Афиша</span></button>
     <button class="tab create" data-open-create><svg class="ic"><use href="#i-plus"/></svg></button>
     <button class="tab" data-tab="mem"><svg class="ic"><use href="#i-heart"/></svg><span class="tl">Было</span></button>
     <button class="tab" data-tab="profile"><svg class="ic"><use href="#i-user"/></svg><span class="tl">Профиль</span></button>
@@ -694,6 +698,61 @@ function memCard(m,idx){
 }
 function ideas(status){return IDEAS.filter(i=>i.status===status);}
 
+// ---- Афиша (KudaGo discovery) ----
+let AFISHA=[], afLoaded=false;
+const likedExt=()=>new Set(IDEAS.filter(i=>i.source==='afisha'&&i.liked).map(i=>i.ext).filter(Boolean));
+const DEMO_AFISHA=[
+  {ext_id:'demo:1',title:'Вечер джаза в Доме музыки',url:'',og_image:'',category:'concert',location:'ММДМ',event_date:'2026-08-09',event_time:'20:00',ongoing:false,price:'от 1500 ₽'},
+  {ext_id:'demo:2',title:'Айвазовский. Ожившие полотна',url:'',og_image:'',category:'walk',location:'Люмьер-Холл',event_date:'2026-09-13',event_time:'',ongoing:true,price:'от 500 ₽'},
+  {ext_id:'demo:3',title:'Большой стендап-концерт',url:'',og_image:'',category:'concert',location:'Известия Hall',event_date:'2026-08-01',event_time:'19:00',ongoing:false,price:'от 2000 ₽'}
+];
+function afWhen(e){ if(e.event_date) return e.ongoing?'до '+fmtFull(e.event_date):dBadge(e.event_date)+(e.event_time?', '+e.event_time:''); return e.ongoing?'идёт сейчас':''; }
+function afishaCard(e){
+  const liked=likedExt().has(e.ext_id), when=afWhen(e);
+  return `<div class="card afcard" data-ext="${e.ext_id}">
+    <div class="photo" style="height:150px;background:${GRAD[e.category]||GRAD.concert}">${imgEl(e.og_image)}<div class="scrim"></div>
+      <button class="af-like glass${liked?' on':''}" type="button" data-aflike="${e.ext_id}" aria-label="Нравится">${ic('i-heart')}</button></div>
+    <div class="card-body">
+      <div class="kicker" style="color:var(${CATVAR[e.category]||'--accent-ember'})">${CATLABEL[e.category]||'событие'}</div>
+      <div class="card-title">${e.title}</div>
+      <div class="row"><span class="meta">${when?ic('i-cal')+' '+when:''}${e.location?(when?' · ':'')+e.location:''}${e.price?' · '+e.price:''}</span></div>
+    </div></div>`;
+}
+function renderAfisha(){
+  const body=document.getElementById('afisha-body'); if(!body)return;
+  const seg=document.querySelector('#af-seg button.on'), mode=seg?seg.dataset.af:'feed';
+  if(mode==='liked'){
+    const liked=IDEAS.filter(i=>i.source==='afisha'&&i.liked);
+    body.innerHTML = liked.length? liked.map(i=>afishaCard({ext_id:i.ext,title:i.title,og_image:i.img,category:i.cat,location:i.loc,event_date:i.evdate,event_time:i.evtime,ongoing:false,price:i.price})).join('')
+      : `<div class="empty" style="padding-top:24px"><div class="glyph glass">${ic('i-heart')}</div><h2>Пока пусто</h2><p>Лайкни события в афише — появятся здесь и в списке.</p></div>`;
+  } else if(mode==='been'){
+    body.innerHTML = MEMORIES.length? MEMORIES.map(memCard).join('') : `<div class="empty" style="padding-top:24px"><div class="glyph glass">${ic('i-heart')}</div><h2>Ещё не были</h2><p>Отмечайте «Мы сходили» — появятся здесь.</p></div>`;
+  } else {
+    body.innerHTML = AFISHA.length? AFISHA.map(afishaCard).join('')
+      : `<div class="empty" style="padding-top:24px"><div class="glyph glass">${ic('i-stack')}</div><h2>Загружаю афишу…</h2><p>Подбираю события рядом.</p></div>`;
+  }
+}
+function loadAfisha(){
+  if(afLoaded)return; afLoaded=true;
+  if(window.__afisha){ window.__afisha({page_size:40}).then(r=>{ if(r&&r.data&&r.data.events)AFISHA=r.data.events; renderAfisha(); },()=>renderAfisha()); }
+  else { AFISHA=DEMO_AFISHA; renderAfisha(); }
+}
+function toggleAfLike(ext){
+  const existing=IDEAS.find(i=>i.source==='afisha'&&i.ext===ext);
+  if(existing){
+    IDEAS=IDEAS.filter(i=>!(i.source==='afisha'&&i.ext===ext));
+    if(window.__sb)window.__sb.from('ideas').delete().eq('ext_id',ext).then(()=>{},()=>{});
+    toast('Убрал из понравившегося');
+  } else {
+    const e=AFISHA.find(x=>x.ext_id===ext)||DEMO_AFISHA.find(x=>x.ext_id===ext); if(!e)return;
+    const tmp={id:'t'+Date.now(),title:e.title,cat:e.category,img:e.og_image||'',url:e.url||'',int:'interesting',note:'',price:e.price||'',loc:e.location||'',evdate:e.event_date||'',evtime:e.event_time||'',by:'me',status:'idea',date:'',time:'',venue:'out',source:'afisha',liked:true,ext:e.ext_id,lat:e.lat,lon:e.lon};
+    IDEAS.unshift(tmp);
+    if(window.__sb)window.__sb.from('ideas').insert({title:e.title,url:e.url||null,category:e.category,author:'me',intensity:'interesting',status:'idea',venue:'out',og_image:e.og_image||null,location:e.location||null,event_date:e.event_date||null,event_time:e.event_time||null,source:'afisha',liked:true,ext_id:e.ext_id,lat:e.lat,lon:e.lon}).select('id').single().then(r=>{if(r&&r.data)tmp.id=r.data.id;},()=>{});
+    toast('В понравившееся 💛');
+  }
+  renderAfisha();
+}
+
 function render(){
   const hv=homeVenue||'all';
   const vfil=arr=>hv==='all'?arr:arr.filter(i=>(i.venue||'out')===hv);
@@ -719,10 +778,7 @@ function render(){
   renderList('Всё');
   document.getElementById('mem-body').innerHTML = MEMORIES.map(memCard).join('');
   document.getElementById('mem-count').textContent=MEMORIES.length;
-  document.getElementById('search-body').innerHTML = inbox.slice(0,3).map(feedCard).join('');
-
-  const cats=['concert','food','trip','bar','walk','film'];
-  document.getElementById('cat-grid').innerHTML = cats.map(c=>`<div class="catpill"><span class="catdot" style="background:rgba(255,255,255,.05);color:var(${CATVAR[c]});display:flex;align-items:center;justify-content:center;font-size:16px">${ic(CATIC[c])}</span>${CATLABEL[c][0].toUpperCase()+CATLABEL[c].slice(1)}</div>`).join('');
+  if(document.getElementById('s-search').classList.contains('active')) renderAfisha();
 
   document.getElementById('st-idea').textContent=allInbox.length;
   document.getElementById('st-plan').textContent=ideas('planned').length;
@@ -1095,6 +1151,7 @@ function showTab(t){
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===tabT));
   if(t==='plan')renderPlan();
   if(t==='shop')renderShop();
+  if(t==='search'){loadAfisha();renderAfisha();}
   window.scrollTo(0,0);
 }
 function setCMode(m){
@@ -1159,6 +1216,8 @@ document.addEventListener('click',e=>{
   const opt=e.target.closest('.iselect .iopt'); if(opt){opt.parentElement.querySelectorAll('.iopt').forEach(o=>o.classList.remove('on'));opt.classList.add('on');return;}
   const chip=e.target.closest('#create .chip'); if(chip){chip.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));chip.classList.add('on');return;}
   const mem=e.target.closest('[data-mem]'); if(mem){openMemory(+mem.dataset.mem);return;}
+  const afl=e.target.closest('[data-aflike]'); if(afl){toggleAfLike(afl.dataset.aflike);return;}
+  const afb=e.target.closest('#af-seg [data-af]'); if(afb){afb.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));afb.classList.add('on');renderAfisha();return;}
   const card=e.target.closest('[data-idea]');
   if(card && !e.target.closest('.btn-ember') && card.dataset.swiped!=='1'){openDetail(card.dataset.idea);}
 });
@@ -1215,10 +1274,11 @@ try{
     window.__sb={from}; window.__coupleId=null;
     window.__op=(op,extra)=>call({op,...(extra||{})}); // couple ops: me / invite / leave / rename
     window.__extract=(url)=>fetch('/api/extract',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData,url})}).then(r=>r.json()).then(j=>({data:j.data,error:j.error?{message:j.error}:null})).catch(e=>({data:null,error:{message:String(e&&e.message||e)}}));
+    window.__afisha=(opts)=>fetch('/api/afisha',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData,...(opts||{})})}).then(r=>r.json()).then(j=>({data:j.data,error:j.error?{message:j.error}:null})).catch(e=>({data:null,error:{message:String(e&&e.message||e)}}));
     const {data,error}=await window.__sb.from('ideas').select('*').order('created_at',{ascending:false});
     if(error){console.warn('db error:',error.message);}
     else if(data&&data.length){
-      const map=r=>({id:r.id,title:r.title,cat:r.category||'concert',img:r.og_image,url:r.url||'',int:r.intensity,note:r.note||'',price:r.price||'',loc:r.location||'',evdate:r.event_date||'',evtime:r.event_time||'',by:r.author,status:r.status,date:r.planned_date,time:r.planned_time,venue:r.venue||'out'});
+      const map=r=>({id:r.id,title:r.title,cat:r.category||'concert',img:r.og_image,url:r.url||'',int:r.intensity,note:r.note||'',price:r.price||'',loc:r.location||'',evdate:r.event_date||'',evtime:r.event_time||'',by:r.author,status:r.status,date:r.planned_date,time:r.planned_time,venue:r.venue||'out',source:r.source||'manual',liked:r.liked||false,ext:r.ext_id||null,lat:r.lat,lon:r.lon});
       const ideas=data.filter(r=>r.status!=='done').map(map);
       const mems=data.filter(r=>r.status==='done').map(r=>({t:r.title,d:r.planned_date||'',cat:r.category||'film',mood:r.mood||'Огонь',note:r.note||'',photos:1}));
       window.applyRemote(ideas,mems);
