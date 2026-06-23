@@ -6,6 +6,8 @@ import { extractEvent, MONTH_NAMES } from '../bot/extract.mjs';
 
 const { BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE, SUPABASE_ANON_KEY, COUPLE_ID, ALLOWED_USER_IDS, TG_WEBHOOK_SECRET } = process.env;
 
+export const maxDuration = 30; // extractEvent may fall back to Jina Reader (~20s) for blocked/JS links
+
 const allowed = (ALLOWED_USER_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const ME_ID = process.env.ME_USER_ID || '681332519';
 const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE || SUPABASE_ANON_KEY, { auth: { persistSession: false } });

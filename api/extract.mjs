@@ -6,6 +6,8 @@ import { verifyInitData } from '../lib/telegram.mjs';
 
 const { BOT_TOKEN } = process.env;
 
+export const maxDuration = 30; // Jina Reader fallback (blocked/JS sites) can take ~20s
+
 // Best-effort: map a link (and its title) to one of the app's idea categories.
 // null = couldn't tell → let the user pick (frontend keeps its default).
 const DOMAIN_CAT = [
