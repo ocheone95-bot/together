@@ -250,6 +250,9 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
 .af-like .ic{width:19px;height:19px}
 .af-like:active{transform:scale(.92)}
 .af-like.on{color:var(--accent-ember)}
+.af-pct{position:absolute;top:12px;left:12px;z-index:2;font-size:11px;font-weight:600;color:var(--text-on-ember);background:var(--accent-ember);border-radius:999px;padding:3px 9px}
+.taste-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:12px 14px;margin:0 0 14px;border-radius:var(--r-field);background:rgba(255,122,69,.1);border:1px solid rgba(255,122,69,.3);color:#FFCDB4;font-size:13px;font-weight:500;font-family:inherit}
+.taste-banner .ic{width:16px;height:16px;flex:none}
 .field{width:100%;padding:14px;border-radius:var(--r-field);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text-primary);font-size:15px;font-family:inherit;margin-bottom:12px}
 .field::placeholder{color:var(--text-tertiary)}
 .label{font-size:13px;color:var(--text-secondary);margin:8px 2px 9px;font-weight:600}
@@ -388,7 +391,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
     <div class="statusbar glass"><span class="sb-l">афиша</span><span class="sb-r" id="afisha-city">Москва</span></div>
     <h1 class="display">Куда сходить</h1>
     <div class="seg glass" id="af-seg" style="margin:6px 0 16px">
-      <button class="on" data-af="feed">Афиша</button><button data-af="liked">Понравившееся</button><button data-af="been">Где были</button>
+      <button class="on" data-af="feed">Рекомендации</button><button data-af="liked">Понравившееся</button><button data-af="been">Где были</button>
     </div>
     <div id="afisha-body" class="stagger"></div>
   </section>
@@ -435,6 +438,13 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
       <div class="srow" data-pair="leave">
         <span class="si" style="background:rgba(255,255,255,.06);color:#E08A7A"><svg class="ic"><use href="#i-x"/></svg></span>
         <span class="sl" style="color:#E08A7A">Выйти из пары</span>
+      </div>
+    </div>
+    <div class="settings glass" style="margin:0 0 14px">
+      <div class="srow" data-open-taste>
+        <span class="si" style="background:rgba(255,122,69,.14);font-size:15px">🎯</span>
+        <span class="sl">Вкусы для рекомендаций</span>
+        <span class="sv">настроить <svg class="ic"><use href="#i-chev"/></svg></span>
       </div>
     </div>
     <div class="settings glass" style="margin:0 0 14px" id="dates-card">
@@ -509,6 +519,22 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
         </div>
         <button class="btn-ember" data-add-shop><svg class="ic"><use href="#i-cart"/></svg> Добавить в покупки</button>
       </div>
+    </div>
+  </div>
+
+  <!-- TASTE SHEET -->
+  <div class="sheet-wrap" id="taste">
+    <div class="sheet-bg" data-close-taste></div>
+    <div class="sheet">
+      <div class="grabber"></div>
+      <div class="sheet-h"><button data-close-taste>Отмена</button><span>Что вам по душе?</span><span style="width:48px"></span></div>
+      <div class="label">Категории</div>
+      <div class="chips" id="taste-cats" style="flex-wrap:wrap;gap:8px;padding:0 0 6px;overflow:visible"></div>
+      <div id="taste-genres-wrap" style="display:none">
+        <div class="label">Жанры кино</div>
+        <div class="chips" id="taste-genres" style="flex-wrap:wrap;gap:7px;padding:0 0 6px;overflow:visible"></div>
+      </div>
+      <button class="btn-ember" style="margin-top:10px" data-save-taste><svg class="ic"><use href="#i-check"/></svg> Готово</button>
     </div>
   </div>
 
@@ -699,18 +725,26 @@ function memCard(m,idx){
 function ideas(status){return IDEAS.filter(i=>i.status===status);}
 
 // ---- Афиша (KudaGo discovery) ----
-let AFISHA=[], afLoaded=false;
+let AFISHA=[], afLoaded=false, TASTE={categories:{},cineGenres:{}}, tasteSet=false;
+const AF_CATS=[
+  {slug:'concert',ru:'Концерты',ic:'i-music'},{slug:'cinema',ru:'Кино',ic:'i-film'},
+  {slug:'theater',ru:'Спектакли',ic:'i-stack'},{slug:'exhibition',ru:'Выставки',ic:'i-palette'},
+  {slug:'party',ru:'Вечеринки',ic:'i-glass'},{slug:'quest',ru:'Квесты',ic:'i-search'},
+  {slug:'tour',ru:'Экскурсии',ic:'i-plane'},{slug:'recreation',ru:'Актив',ic:'i-tree'},
+];
+const AF_GENRES=['комедия','драма','мелодрама','ужасы','фантастика','триллер','боевик','детектив','приключения','мультфильм'];
 const likedExt=()=>new Set(IDEAS.filter(i=>i.source==='afisha'&&i.liked).map(i=>i.ext).filter(Boolean));
 const DEMO_AFISHA=[
-  {ext_id:'demo:1',title:'Вечер джаза в Доме музыки',url:'',og_image:'',category:'concert',location:'ММДМ',event_date:'2026-08-09',event_time:'20:00',ongoing:false,price:'от 1500 ₽'},
-  {ext_id:'demo:2',title:'Айвазовский. Ожившие полотна',url:'',og_image:'',category:'walk',location:'Люмьер-Холл',event_date:'2026-09-13',event_time:'',ongoing:true,price:'от 500 ₽'},
-  {ext_id:'demo:3',title:'Большой стендап-концерт',url:'',og_image:'',category:'concert',location:'Известия Hall',event_date:'2026-08-01',event_time:'19:00',ongoing:false,price:'от 2000 ₽'}
+  {ext_id:'demo:1',title:'Вечер джаза в Доме музыки',url:'',og_image:'',category:'concert',cats:['concert'],location:'ММДМ',event_date:'2026-08-09',event_time:'20:00',ongoing:false,price:'от 1500 ₽'},
+  {ext_id:'demo:2',title:'Айвазовский. Ожившие полотна',url:'',og_image:'',category:'walk',cats:['exhibition'],location:'Люмьер-Холл',event_date:'2026-09-13',event_time:'',ongoing:true,price:'от 500 ₽'},
+  {ext_id:'demo:3',title:'Большой стендап-концерт',url:'',og_image:'',category:'concert',cats:['concert'],location:'Известия Hall',event_date:'2026-08-01',event_time:'19:00',ongoing:false,price:'от 2000 ₽'}
 ];
 function afWhen(e){ if(e.event_date) return e.ongoing?'до '+fmtFull(e.event_date):dBadge(e.event_date)+(e.event_time?', '+e.event_time:''); return e.ongoing?'идёт сейчас':''; }
-function afishaCard(e){
+function afishaCard(e,pct){
   const liked=likedExt().has(e.ext_id), when=afWhen(e);
   return `<div class="card afcard" data-ext="${e.ext_id}">
     <div class="photo" style="height:150px;background:${GRAD[e.category]||GRAD.concert}">${imgEl(e.og_image)}<div class="scrim"></div>
+      ${pct?`<span class="af-pct">${pct}% вам</span>`:''}
       <button class="af-like glass${liked?' on':''}" type="button" data-aflike="${e.ext_id}" aria-label="Нравится">${ic('i-heart')}</button></div>
     <div class="card-body">
       <div class="kicker" style="color:var(${CATVAR[e.category]||'--accent-ember'})">${CATLABEL[e.category]||'событие'}</div>
@@ -728,9 +762,34 @@ function renderAfisha(){
   } else if(mode==='been'){
     body.innerHTML = MEMORIES.length? MEMORIES.map(memCard).join('') : `<div class="empty" style="padding-top:24px"><div class="glyph glass">${ic('i-heart')}</div><h2>Ещё не были</h2><p>Отмечайте «Мы сходили» — появятся здесь.</p></div>`;
   } else {
-    body.innerHTML = AFISHA.length? AFISHA.map(afishaCard).join('')
-      : `<div class="empty" style="padding-top:24px"><div class="glyph glass">${ic('i-stack')}</div><h2>Загружаю афишу…</h2><p>Подбираю события рядом.</p></div>`;
+    if(!AFISHA.length){ body.innerHTML=`<div class="empty" style="padding-top:24px"><div class="glyph glass">${ic('i-stack')}</div><h2>Загружаю афишу…</h2><p>Подбираю события рядом.</p></div>`; return; }
+    computeHist();
+    const scored=AFISHA.map(e=>({e,s:tasteScore(e)})).sort((a,b)=>b.s-a.s);
+    const maxS=Math.max(0.0001,scored[0].s);
+    const banner=!tasteSet?`<button class="taste-banner" type="button" data-open-taste><span>${ic('i-sliders')} Настройте вкусы — подберём свидания под вас</span>${ic('i-chev')}</button>`:'';
+    body.innerHTML = banner + scored.map(({e,s})=>afishaCard(e, (tasteSet&&s>0)?Math.round(72+27*Math.min(1,s/maxS)):null)).join('');
   }
+}
+function computeHist(){ const h={}; IDEAS.forEach(i=>{ if(i.liked||i.status==='done'||i.status==='planned') h[i.cat]=(h[i.cat]||0)+1; }); window.__HIST=h; }
+function tasteScore(e){
+  let s=0;
+  for(const c of (e.cats||[])) s += (TASTE.categories[c]||0)*2;
+  s += (window.__HIST&&window.__HIST[e.category])||0;
+  if((e.cats||[]).includes('cinema')){ const txt=((e.cats||[]).join(' ')+' '+(e.title||'')).toLowerCase(); for(const g in (TASTE.cineGenres||{})) if(txt.includes(g)) s+=1.5; }
+  const d=daysUntil(e.event_date); if(!isNaN(d)&&d>=0&&d<=14) s+=0.5;
+  return s;
+}
+function renderTasteSheet(){
+  document.getElementById('taste-cats').innerHTML = AF_CATS.map(c=>`<button class="chip${TASTE.categories[c.slug]?' on':''}" data-tcat="${c.slug}">${ic(c.ic)} ${c.ru}</button>`).join('');
+  document.getElementById('taste-genres-wrap').style.display = TASTE.categories['cinema']?'':'none';
+  document.getElementById('taste-genres').innerHTML = AF_GENRES.map(g=>`<button class="chip${TASTE.cineGenres[g]?' on':''}" data-tgenre="${g}">${g}</button>`).join('');
+}
+function openTaste(){ renderTasteSheet(); document.getElementById('taste').classList.add('open'); document.body.style.overflow='hidden'; }
+function saveTaste(){
+  tasteSet=true;
+  if(window.__op)window.__op('settaste',{taste:{categories:TASTE.categories,cineGenres:TASTE.cineGenres},taste_set:true}).then(()=>{},()=>{});
+  document.getElementById('taste').classList.remove('open'); document.body.style.overflow='';
+  toast('Вкусы сохранены 💛'); renderAfisha();
 }
 function loadAfisha(){
   if(afLoaded)return; afLoaded=true;
@@ -1052,6 +1111,9 @@ function setDVal(id,v){const el=document.getElementById(id);if(el)el.value=v||''
 function reloadCouple(){if(window.__op)window.__op('me').then(r=>{if(r&&r.data)applyCouple(r.data);},()=>{});}
 function applyCouple(c){
   window.__couple=c; const members=c.members||[];
+  TASTE=(c.taste&&typeof c.taste==='object')?{categories:c.taste.categories||{},cineGenres:c.taste.cineGenres||{}}:{categories:{},cineGenres:{}};
+  tasteSet=!!c.taste_set;
+  if(document.getElementById('s-search')&&document.getElementById('s-search').classList.contains('active'))renderAfisha();
   const me=members.find(m=>String(m.telegram_id)===String(c.me));
   const partner=members.find(m=>String(m.telegram_id)!==String(c.me));
   const pn=document.getElementById('pair-name'); if(pn)pn.textContent=c.name||'Моя пара';
@@ -1218,6 +1280,11 @@ document.addEventListener('click',e=>{
   const mem=e.target.closest('[data-mem]'); if(mem){openMemory(+mem.dataset.mem);return;}
   const afl=e.target.closest('[data-aflike]'); if(afl){toggleAfLike(afl.dataset.aflike);return;}
   const afb=e.target.closest('#af-seg [data-af]'); if(afb){afb.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));afb.classList.add('on');renderAfisha();return;}
+  if(e.target.closest('[data-open-taste]')){openTaste();return;}
+  if(e.target.closest('[data-close-taste]')){document.getElementById('taste').classList.remove('open');document.body.style.overflow='';return;}
+  if(e.target.closest('[data-save-taste]')){saveTaste();return;}
+  const tc=e.target.closest('[data-tcat]'); if(tc){const s=tc.dataset.tcat;if(TASTE.categories[s])delete TASTE.categories[s];else TASTE.categories[s]=1;tc.classList.toggle('on');if(s==='cinema')document.getElementById('taste-genres-wrap').style.display=TASTE.categories['cinema']?'':'none';return;}
+  const tgn=e.target.closest('[data-tgenre]'); if(tgn){const g=tgn.dataset.tgenre;if(TASTE.cineGenres[g])delete TASTE.cineGenres[g];else TASTE.cineGenres[g]=1;tgn.classList.toggle('on');return;}
   const card=e.target.closest('[data-idea]');
   if(card && !e.target.closest('.btn-ember') && card.dataset.swiped!=='1'){openDetail(card.dataset.idea);}
 });
