@@ -40,6 +40,8 @@ img{display:block}
 #boot .bflame{font-size:54px;color:var(--accent-ember);filter:drop-shadow(0 0 20px rgba(255,122,69,.55));animation:bootpulse 1.5s ease-in-out infinite}
 #boot .bname{font-family:var(--font-serif);font-size:26px;color:var(--text-primary);letter-spacing:.5px;opacity:.92}
 @keyframes bootpulse{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.13);opacity:1}}
+.dinput{background:transparent;border:none;color:var(--accent-ember);font-size:14px;font-weight:600;font-family:inherit;text-align:right;padding:0;min-width:118px;color-scheme:dark;-webkit-appearance:none;appearance:none}
+.dinput::-webkit-calendar-picker-indicator{filter:invert(.7) sepia(1) saturate(4) hue-rotate(330deg);opacity:.8;cursor:pointer}
 .ambient{position:fixed;max-width:430px;width:100%;height:100dvh;top:0;pointer-events:none;z-index:0;overflow:hidden}
 .ambient::before,.ambient::after{content:"";position:absolute;border-radius:50%;filter:blur(11px);opacity:.5}
 .ambient::before{width:280px;height:280px;right:-70px;top:-40px;background:radial-gradient(closest-side,var(--accent-glow),transparent)}
@@ -389,9 +391,10 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
       </div>
       <div>
         <div id="couple-names" style="font-family:var(--font-serif);font-size:20px">Дима <span style="color:var(--text-tertiary)">и</span> Аня</div>
-        <div class="meta">вместе 1043 дня</div>
+        <div class="meta" id="together-days">—</div>
       </div>
     </div>
+    <div id="next-event" style="display:none;margin:-6px 2px 16px;font-size:13px;font-weight:600;color:var(--accent-ember)"></div>
     <div class="stats">
       <div class="stat"><div class="n" id="st-idea">4</div><div class="c">в списке</div></div>
       <div class="stat"><div class="n" id="st-plan">2</div><div class="c">в плане</div></div>
@@ -412,6 +415,12 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
         <span class="si" style="background:rgba(255,255,255,.06);color:#E08A7A"><svg class="ic"><use href="#i-x"/></svg></span>
         <span class="sl" style="color:#E08A7A">Выйти из пары</span>
       </div>
+    </div>
+    <div class="settings glass" style="margin:0 0 14px" id="dates-card">
+      <div class="srow"><span class="si" style="background:rgba(255,122,69,.14);font-size:15px">💞</span><span class="sl">Вместе с</span><span class="sv"><input type="date" class="dinput" id="d-rel"></span></div>
+      <div class="srow"><span class="si" style="background:rgba(255,122,69,.14);font-size:15px">💍</span><span class="sl">Свадьба</span><span class="sv"><input type="date" class="dinput" id="d-wed"></span></div>
+      <div class="srow"><span class="si" style="background:rgba(255,122,69,.14);font-size:15px">🎂</span><span class="sl">Мой день рождения</span><span class="sv"><input type="date" class="dinput" id="d-bday"></span></div>
+      <div class="srow" id="d-bday-partner-row" style="display:none"><span class="si" style="background:rgba(120,190,255,.12);font-size:15px">🎂</span><span class="sl" id="d-bday-partner-label">День рождения партнёра</span><span class="sv"><input type="date" class="dinput" id="d-bday-partner"></span></div>
     </div>
     <div class="settings glass" style="margin:0 0 14px">
       <div class="srow" data-share-app>
@@ -893,6 +902,37 @@ function shareApp(){
   if(window.__tg&&window.__tg.openTelegramLink){try{window.__tg.openTelegramLink(share);return;}catch(e){}}
   try{navigator.clipboard.writeText(link);toast('Ссылка на бота скопирована');}catch(e){toast(link);}
 }
+function daysSince(iso){if(!iso)return null;const d=new Date(iso+'T00:00:00');const t=new Date();t.setHours(0,0,0,0);return Math.max(0,Math.floor((t-d)/86400000));}
+function nextOccur(iso){if(!iso)return null;const d=new Date(iso+'T00:00:00');const t=new Date();t.setHours(0,0,0,0);let n=new Date(t.getFullYear(),d.getMonth(),d.getDate());if(n<t)n=new Date(t.getFullYear()+1,d.getMonth(),d.getDate());return{days:Math.round((n-t)/86400000),years:n.getFullYear()-d.getFullYear()};}
+function setDVal(id,v){const el=document.getElementById(id);if(el)el.value=v||'';}
+function reloadCouple(){if(window.__op)window.__op('me').then(r=>{if(r&&r.data)applyCouple(r.data);},()=>{});}
+function applyCouple(c){
+  window.__couple=c; const members=c.members||[];
+  const me=members.find(m=>String(m.telegram_id)===String(c.me));
+  const partner=members.find(m=>String(m.telegram_id)!==String(c.me));
+  const pn=document.getElementById('pair-name'); if(pn)pn.textContent=c.name||'Моя пара';
+  const cn=document.getElementById('couple-names'); if(cn){const ns=members.map(m=>m.name).filter(Boolean);cn.textContent=ns.length?ns.join(' и '):(c.name||'Моя пара');}
+  const td=document.getElementById('together-days'); if(td){const ds=daysSince(c.relationship_start);td.textContent=ds!=null?('вместе '+plDays(ds)):'добавь дату начала ↓';}
+  setDVal('d-rel',c.relationship_start); setDVal('d-wed',c.wedding_date); if(me)setDVal('d-bday',me.birthday);
+  const pr=document.getElementById('d-bday-partner-row');
+  if(pr){if(partner){pr.style.display='';const lb=document.getElementById('d-bday-partner-label');if(lb)lb.textContent='День рождения '+(partner.name||'партнёра');setDVal('d-bday-partner',partner.birthday);pr.dataset.tid=partner.telegram_id;}else{pr.style.display='none';}}
+  const evs=[];
+  const o1=nextOccur(c.relationship_start); if(o1)evs.push({d:o1.days,t:'🎉 годовщина'+(o1.years?' '+o1.years+' лет':'')});
+  const o2=nextOccur(c.wedding_date); if(o2)evs.push({d:o2.days,t:'💍 свадьбе'+(o2.years?' '+o2.years+' лет':'')});
+  members.forEach(m=>{const o=nextOccur(m.birthday);if(o)evs.push({d:o.days,t:'🎂 ДР '+(m.name||'')});});
+  const ne=document.getElementById('next-event');
+  if(ne){const up=evs.filter(e=>e.d>=0).sort((a,b)=>a.d-b.d)[0];
+    if(up){ne.style.display='';ne.textContent=up.t.trim()+(up.d===0?' — сегодня! 🎉':up.d===1?' — завтра':' · через '+plDays(up.d));}else ne.style.display='none';}
+}
+function saveDate(kind,el){
+  if(!window.__op){toast('Доступно только в Telegram');return;}
+  const v=el.value||null; let p;
+  if(kind==='rel')p=window.__op('setdates',{relationship_start:v});
+  else if(kind==='wed')p=window.__op('setdates',{wedding_date:v});
+  else if(kind==='bday')p=window.__op('setbirthday',{birthday:v});
+  else if(kind==='bdayp'){const row=el.closest('#d-bday-partner-row');const tid=row&&row.dataset.tid;p=window.__op('setbirthday',{birthday:v,telegram_id:tid?+tid:undefined});}
+  if(p)p.then(()=>reloadCouple(),()=>toast('Не сохранилось'));
+}
 async function pairAction(kind){
   if(!window.__op){toast('Доступно только в Telegram');return;}
   if(kind==='invite'){
@@ -1053,7 +1093,11 @@ function initTelegram(){
   return true;
 }
 const inTelegram=initTelegram();
-document.addEventListener('change',e=>{const rp=e.target.closest('[data-replan]');if(rp)replanIdea(+rp.dataset.replan,rp.value);});
+document.addEventListener('change',e=>{const rp=e.target.closest('[data-replan]');if(rp){replanIdea(+rp.dataset.replan,rp.value);return;}
+  const id=e.target.id;
+  if(id==='d-rel')saveDate('rel',e.target); else if(id==='d-wed')saveDate('wed',e.target);
+  else if(id==='d-bday')saveDate('bday',e.target); else if(id==='d-bday-partner')saveDate('bdayp',e.target);
+});
 
 render();
 setTimeout(function(){var b=document.getElementById('boot');if(b)b.classList.add('hide');},9000); // safety: never trap on the loader
@@ -1089,9 +1133,7 @@ try{
     }
     const sres=await window.__sb.from('shopping').select('*').order('created_at',{ascending:true});
     if(sres&&sres.data&&sres.data.length)window.applyShop(sres.data.map(s=>({id:s.id,text:s.text,theme:s.theme,done:s.done,by:s.author})));
-    try{const meR=await window.__op('me');if(meR&&meR.data){const c=meR.data;window.__couple=c;
-      const pn=document.getElementById('pair-name');if(pn)pn.textContent=c.name||'Моя пара';
-      const cn=document.getElementById('couple-names');if(cn){const ns=(c.members||[]).map(m=>m.name).filter(Boolean);cn.textContent=ns.length?ns.join(' и '):(c.name||'Моя пара');}}}catch(e){}
+    try{const meR=await window.__op('me');if(meR&&meR.data)applyCouple(meR.data);}catch(e){}
   }
 }catch(e){console.warn('data load skipped:',e&&e.message||e);}
 {const b=document.getElementById('boot');if(b)b.classList.add('hide');}

@@ -45,9 +45,34 @@ async function notifyPartner(couple_id, actor) {
 // Couple management: who am I with / invite a partner / leave to a fresh couple / rename.
 async function handleOp(op, body, user, couple_id, res) {
   if (op === 'me') {
-    const c = await svc().from('couples').select('name').eq('id', couple_id).maybeSingle();
-    const members = await svc().from('app_users').select('telegram_id,name').eq('couple_id', couple_id);
-    return res.status(200).json({ data: { couple_id, name: c.data?.name || '', members: members.data || [], me: user.id } });
+    // Resilient to dates.sql not being run yet: fall back to the basic columns on error.
+    let c = await svc().from('couples').select('name,relationship_start,wedding_date').eq('id', couple_id).maybeSingle();
+    if (c.error) c = await svc().from('couples').select('name').eq('id', couple_id).maybeSingle();
+    let members = await svc().from('app_users').select('telegram_id,name,birthday').eq('couple_id', couple_id);
+    if (members.error) members = await svc().from('app_users').select('telegram_id,name').eq('couple_id', couple_id);
+    return res.status(200).json({ data: {
+      couple_id, name: c.data?.name || '',
+      relationship_start: c.data?.relationship_start || null, wedding_date: c.data?.wedding_date || null,
+      members: members.data || [], me: user.id } });
+  }
+  if (op === 'setdates') {
+    const patch = {};
+    if ('relationship_start' in body) patch.relationship_start = body.relationship_start || null;
+    if ('wedding_date' in body) patch.wedding_date = body.wedding_date || null;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'no dates' });
+    const { error } = await svc().from('couples').update(patch).eq('id', couple_id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ data: patch });
+  }
+  if (op === 'setbirthday') {
+    let target = user.id;
+    if (body.telegram_id) {
+      const m = await svc().from('app_users').select('telegram_id').eq('couple_id', couple_id).eq('telegram_id', body.telegram_id).maybeSingle();
+      if (m.data) target = body.telegram_id;
+    }
+    const { error } = await svc().from('app_users').update({ birthday: body.birthday || null }).eq('telegram_id', target);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ data: { telegram_id: target, birthday: body.birthday || null } });
   }
   if (op === 'invite') {
     const token = crypto.randomBytes(8).toString('hex');
