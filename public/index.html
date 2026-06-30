@@ -268,6 +268,12 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
 .taste-back .ic{width:18px;height:18px}
 .sb-tune{display:inline-flex;align-items:center;justify-content:center;color:var(--accent-ember);margin-right:8px;vertical-align:middle}
 .sb-tune .ic{width:18px;height:18px}
+.done-pic{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:150px;border-radius:var(--r-photo);border:1.5px dashed rgba(255,255,255,.22);background:rgba(255,255,255,.03);color:var(--text-tertiary);font-size:13px;margin-bottom:16px;cursor:pointer}
+.done-pic .uc{font-size:26px;color:var(--accent-ember)}
+.done-pic:active{background:rgba(255,255,255,.06)}
+.done-pic.filled{position:relative;border:none;overflow:hidden;background:#17131f}
+.done-pic.filled img{width:100%;height:100%;object-fit:cover}
+.done-pic .ux{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;z-index:2}
 .field{width:100%;padding:14px;border-radius:var(--r-field);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text-primary);font-size:15px;font-family:inherit;margin-bottom:12px}
 .field::placeholder{color:var(--text-tertiary)}
 .label{font-size:13px;color:var(--text-secondary);margin:8px 2px 9px;font-weight:600}
@@ -563,11 +569,9 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;strok
       <div class="sheet-h"><button data-close-done>Отмена</button><span>Как прошло?</span><span style="width:48px"></span></div>
       <div id="done-head" style="margin-bottom:16px"></div>
       <div class="label">Фото со свидания</div>
-      <div class="upgrid">
-        <div class="upslot filled" id="done-photo" style="background:linear-gradient(155deg,#4A1830,#B8431F)"><button class="ux glass" type="button"><svg class="ic"><use href="#i-x"/></svg></button></div>
-        <div class="upslot empty primary"><svg class="ic uc"><use href="#i-camera"/></svg>Добавить</div>
-        <div class="upslot empty"><svg class="ic uc"><use href="#i-plus"/></svg>Фото</div>
-      </div>
+      <input type="file" id="done-file" accept="image/*" style="display:none">
+      <div class="done-pic" id="done-pic" data-pick-photo><svg class="ic uc"><use href="#i-camera"/></svg><span>Добавить фото</span></div>
+      <div class="done-pic filled" id="done-prev" style="display:none"><img id="done-prev-img" alt=""><button class="ux glass" type="button" data-clear-photo><svg class="ic"><use href="#i-x"/></svg></button></div>
       <div class="label">Как настроение?</div>
       <div class="iselect" id="mood-select">
         <button class="iopt on"><svg class="ic"><use href="#i-flame"/></svg>Огонь</button>
@@ -736,7 +740,7 @@ function feedCard(i){
     </div></div>`;
 }
 function memCard(m,idx){
-  return `<div class="mem" data-mem="${idx}" style="background:${GRAD[m.cat]}"><div class="scrim"></div>
+  return `<div class="mem" data-mem="${idx}" style="background:${GRAD[m.cat]}">${m.img?imgEl(m.img):''}<div class="scrim"></div>
     <div class="mb"><div class="mt">${m.t}</div><div class="md">${m.d}</div></div></div>`;
 }
 function ideas(status){return IDEAS.filter(i=>i.status===status);}
@@ -1111,11 +1115,12 @@ function openDetail(id){
 }
 function openMemory(idx){
   const m=MEMORIES[idx]; if(!m)return;
-  const strip=Array.from({length:Math.min(m.photos,3)}).map((_,n)=>`<div class="ph" style="background:${GRAD[m.cat]};opacity:${0.9-n*0.12}"></div>`).join('')
-    + (m.photos>3?`<div class="ph more">+${m.photos-3}</div>`:'');
+  const strip = m.img
+    ? `<div class="ph" style="position:relative;overflow:hidden">${imgEl(m.img)}</div>`
+    : Array.from({length:Math.min(m.photos,3)}).map((_,n)=>`<div class="ph" style="background:${GRAD[m.cat]};opacity:${0.9-n*0.12}"></div>`).join('') + (m.photos>3?`<div class="ph more">+${m.photos-3}</div>`:'');
   const d=document.getElementById('detail');
   d.innerHTML=`
-    <div class="hero" style="background:${GRAD[m.cat]}"><div class="scrim"></div>
+    <div class="hero" style="background:${GRAD[m.cat]}">${m.img?imgEl(m.img):''}<div class="scrim"></div>
       <button class="navbtn back glass" data-close-detail>${ic('i-arrow-left')}</button>
       <button class="navbtn share glass">${ic('i-share')}</button></div>
     <div class="dbody">
@@ -1228,21 +1233,41 @@ function replanIdea(id,date){
   if(window.__sb)window.__sb.from('ideas').update({planned_date:date}).eq('id',i.id).then(()=>{},()=>{});
   render(); openDetail(i.id);
 }
-let doneId=null;
+let doneId=null, donePhotoData=null;
+function resetDonePhoto(){
+  donePhotoData=null;
+  const pic=document.getElementById('done-pic'),prev=document.getElementById('done-prev'),f=document.getElementById('done-file');
+  if(pic)pic.style.display=''; if(prev)prev.style.display='none'; if(f)f.value='';
+}
+function resizeImage(file,max,q,cb){
+  const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=()=>{ let w=img.naturalWidth,h=img.naturalHeight; const sc=Math.min(1,max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url);
+    try{cb(c.toDataURL('image/jpeg',q));}catch(e){cb(null);} };
+  img.onerror=()=>{URL.revokeObjectURL(url);cb(null);}; img.src=url;
+}
+function onDonePhoto(input){
+  const file=input.files&&input.files[0]; if(!file)return;
+  resizeImage(file,1280,0.82,data=>{ if(!data){toast('Не вышло прочитать фото');return;}
+    donePhotoData=data; document.getElementById('done-prev-img').src=data;
+    document.getElementById('done-pic').style.display='none'; document.getElementById('done-prev').style.display=''; });
+}
 function openDone(id){
-  const i=IDEAS.find(x=>String(x.id)===String(id)); if(!i)return; doneId=i.id;
-  document.getElementById('done-photo').style.background=GRAD[i.cat];
+  const i=IDEAS.find(x=>String(x.id)===String(id)); if(!i)return; doneId=i.id; resetDonePhoto();
   document.getElementById('done-head').innerHTML=`<div style="font-family:var(--font-serif);font-size:20px">${i.title}</div><div class="meta">${i.date?fmtFull(i.date):''} ${i.time||''}</div>`;
   document.getElementById('done').classList.add('open'); document.body.style.overflow='hidden';
 }
 function saveDone(){
   const i=IDEAS.find(x=>String(x.id)===String(doneId)); if(!i)return;
   const mood=document.querySelector('#mood-select .iopt.on')?.innerText.trim()||'Огонь';
-  MEMORIES.unshift({t:i.title,d:i.date?fmtFull(i.date)+' 2026':'сегодня',cat:i.cat,mood,note:i.note,photos:1});
+  const photo=donePhotoData;
+  MEMORIES.unshift({t:i.title,d:i.date?fmtFull(i.date)+' 2026':'сегодня',cat:i.cat,mood,note:i.note,photos:photo?1:0,img:photo||''});
   i.status='done';
-  if(window.__sb)window.__sb.from('ideas').update({status:'done',mood}).eq('id',i.id).then(()=>{},()=>{});
+  const persist=path=>{ if(window.__sb)window.__sb.from('ideas').update({status:'done',mood,done_photo:path||null}).eq('id',i.id).then(()=>{},()=>{}); };
+  if(photo&&window.__upload){ window.__upload(photo).then(r=>persist(r&&r.data?r.data.path:null),()=>persist(null)); }
+  else persist(null);
   document.getElementById('done').classList.remove('open');
-  closeDetail(); document.body.style.overflow='';
+  closeDetail(); document.body.style.overflow=''; resetDonePhoto();
   render(); showTab('mem');
 }
 
@@ -1299,6 +1324,8 @@ document.addEventListener('click',e=>{
   const srow=e.target.closest('[data-shop]'); if(srow){toggleShop(srow.dataset.shop);return;}
   if(e.target.closest('[data-close-sheet]')){document.getElementById('create').classList.remove('open');document.body.style.overflow='';return;}
   if(e.target.closest('[data-close-done]')){document.getElementById('done').classList.remove('open');document.body.style.overflow='';return;}
+  if(e.target.closest('[data-pick-photo]')){const f=document.getElementById('done-file');if(f)f.click();return;}
+  if(e.target.closest('[data-clear-photo]')){resetDonePhoto();return;}
   if(e.target.closest('[data-save-done]')){saveDone();return;}
   if(e.target.closest('#open-list')){showTab('list');return;}
   if(e.target.closest('[data-close-detail]')){closeDetail();return;}
@@ -1359,6 +1386,7 @@ function initTelegram(){
 const inTelegram=initTelegram();
 document.addEventListener('change',e=>{const rp=e.target.closest('[data-replan]');if(rp){replanIdea(rp.dataset.replan,rp.value);return;}
   const id=e.target.id;
+  if(id==='done-file'){onDonePhoto(e.target);return;}
   if(id==='cd-capture'){maybeExtract();return;}
   if(id==='d-rel')saveDate('rel',e.target); else if(id==='d-wed')saveDate('wed',e.target);
   else if(id==='d-bday')saveDate('bday',e.target); else if(id==='d-bday-partner')saveDate('bdayp',e.target);
@@ -1389,12 +1417,13 @@ try{
     window.__op=(op,extra)=>call({op,...(extra||{})}); // couple ops: me / invite / leave / rename
     window.__extract=(url)=>fetch('/api/extract',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData,url})}).then(r=>r.json()).then(j=>({data:j.data,error:j.error?{message:j.error}:null})).catch(e=>({data:null,error:{message:String(e&&e.message||e)}}));
     window.__afisha=(opts)=>fetch('/api/afisha',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData,...(opts||{})})}).then(r=>r.json()).then(j=>({data:j.data,error:j.error?{message:j.error}:null})).catch(e=>({data:null,error:{message:String(e&&e.message||e)}}));
+    window.__upload=(image)=>fetch('/api/upload',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData,image})}).then(r=>r.json()).then(j=>({data:j.data,error:j.error?{message:j.error}:null})).catch(e=>({data:null,error:{message:String(e&&e.message||e)}}));
     const {data,error}=await window.__sb.from('ideas').select('*').order('created_at',{ascending:false});
     if(error){console.warn('db error:',error.message);}
     else if(data&&data.length){
       const map=r=>({id:r.id,title:r.title,cat:r.category||'concert',img:r.og_image,url:r.url||'',int:r.intensity,note:r.note||'',price:r.price||'',loc:r.location||'',evdate:r.event_date||'',evtime:r.event_time||'',by:r.author,status:r.status,date:r.planned_date,time:r.planned_time,venue:r.venue||'out',source:r.source||'manual',liked:r.liked||false,ext:r.ext_id||null,lat:r.lat,lon:r.lon});
       const ideas=data.filter(r=>r.status!=='done').map(map);
-      const mems=data.filter(r=>r.status==='done').map(r=>({t:r.title,d:r.planned_date||'',cat:r.category||'film',mood:r.mood||'Огонь',note:r.note||'',photos:1}));
+      const mems=data.filter(r=>r.status==='done').map(r=>({t:r.title,d:r.planned_date||'',cat:r.category||'film',mood:r.mood||'Огонь',note:r.note||'',photos:r.done_photo_url?1:0,img:r.done_photo_url||''}));
       window.applyRemote(ideas,mems);
       console.log('Together: loaded '+data.length+' rows via /db');
     }

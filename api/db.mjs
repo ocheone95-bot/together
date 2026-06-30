@@ -150,6 +150,17 @@ export default async function handler(req, res) {
     if (!error && table === 'shopping' && action === 'update') {
       try { await notifyPartner(couple_id, user); } catch (e) { /* best-effort */ }
     }
+    // Sign private memory-photo paths into temporary display URLs on read.
+    if (!error && table === 'ideas' && action === 'select' && Array.isArray(data)) {
+      const paths = data.filter((r) => r.done_photo).map((r) => r.done_photo);
+      if (paths.length) {
+        try {
+          const { data: signed } = await svc().storage.from('memories').createSignedUrls(paths, 60 * 60 * 24);
+          const byPath = {}; (signed || []).forEach((s) => { if (s.path && s.signedUrl) byPath[s.path] = s.signedUrl; });
+          data.forEach((r) => { if (r.done_photo) r.done_photo_url = byPath[r.done_photo] || null; });
+        } catch (e) { /* signing best-effort */ }
+      }
+    }
     return res.status(200).json({ data: data ?? null, error: error ? error.message : null });
   } catch (e) {
     return res.status(500).json({ error: String((e && e.message) || e) });
